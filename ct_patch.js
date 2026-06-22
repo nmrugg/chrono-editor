@@ -193,18 +193,20 @@ const compressedPacket = compressCT(raw);
 console.log(`Original packet size: ${totalPktSize} bytes`);
 console.log(`New packet size:      ${compressedPacket.length} bytes`);
 
-if (compressedPacket.length !== totalPktSize) {
-  console.error(`Error: Size mismatch. Expected ${totalPktSize}, got ${compressedPacket.length}.`);
+if (compressedPacket.length > totalPktSize) {
+  console.error(`Error: New sprite is ${compressedPacket.length - totalPktSize} bytes too large.`);
   console.error('   Patching would overwrite adjacent ROM data. Simplify the sprite or use a ROM hole.');
   process.exit(1);
 }
 
-// Create a completely independent copy of the ROM to prevent memory aliasing corruption
+// Pad smaller packets with zeros to preserve ROM layout, pointer alignment, and flag byte
+const finalPacket = Buffer.alloc(totalPktSize, 0x00);
+finalPacket.set(compressedPacket, 0);
+finalPacket[totalPktSize - 1] = rom[address + totalPktSize - 1]; // Restore trailing flag exactly
+
 const romOut = Buffer.allocUnsafe(rom.length);
 rom.copy(romOut);
-
-// Patch directly at the resolved address
-romOut.set(compressedPacket, address);
+romOut.set(finalPacket, address);
 
 fs.writeFileSync(outRomFile, romOut);
 console.log(`Patched 0x${address.toString(16).toUpperCase()}`);
